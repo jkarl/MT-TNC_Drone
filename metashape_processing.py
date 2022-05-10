@@ -46,7 +46,7 @@ surface = Metashape.SurfaceType.Arbitrary #build mesh surface type
 face_num = Metashape.FaceCount.LowFaceCount #build mesh polygon count
 atlas_size = 4096
 
-def process(path):
+def process(path, outname):
     # stuff here...
 
     print("Processing " + path)
@@ -125,7 +125,7 @@ def process(path):
     chunk.optimizeCameras(adaptive_fitting=use_adaptive_fitting)
     doc.save()
 
-    ## Save camera reference data for later. Used for generating AOI.
+    # Save camera reference data for later. Used for generating AOI.
     print("Saving camera reference data")
     chunk.exportReference(path + "/photogrammetry/reference.csv", Metashape.ReferenceFormatCSV,
                         items=Metashape.ReferenceItemsCameras, delimiter=",")
@@ -137,14 +137,8 @@ def process(path):
         camerasY.append(camera.reference.location[1])
     cameraLocs = list(zip(camerasX,camerasY))
 
-    # Set coordinate transformation
-    wgs84 = pyproj.CRS('EPSG:4326')
-    mtsp = pyproj.CRS('EPSG:32100')
-    projector = pyproj.Transformer.from_crs(wgs84, mtsp, always_xy=True).transform
-
     # Create polygon object
     points = MultiPoint(cameraLocs)
-    #mtspPoints = transform(projector,points)
     convexHull = points.convex_hull
 
     # Define a polygon feature geometry with one attribute
@@ -155,19 +149,17 @@ def process(path):
 
     # Write a new Shapefile
     with fiona.open(path+'/photogrammetry/aoi.shp', 'w', 'ESRI Shapefile', schema) as c:
-        ## If there are multiple geometries, put the "for" loop here
         c.write({
             'geometry': mapping(convexHull),
             'properties': {'id': 1},
         })
 
-    ## Add the shape to the Metashape Project
-    #chunk.shapes = Metashape.Shapes()
-    #chunk.shapes.crs = proj_crs
-    os.chdir('C:/Users/jkarl/Downloads/Matador_Emond/photogrammetry')
-    chunk.importShapes('aoi.shp', boundary_type=Metashape.Shape.OuterBoundary, crs=Metashape.CoordinateSystem("EPSG::4326"))
+    # Add the shape to the Metashape Project
+    os.chdir(path+'/photogrammetry')
+    chunk.importShapes('aoi.shp', boundary_type=Metashape.Shape.OuterBoundary,
+                       crs=Metashape.CoordinateSystem("EPSG::4326"))
 
-    ## Build Dense Cloud
+    # Build Dense Cloud
     print("Building dense cloud...")
     chunk.buildDepthMaps(downscale=quality, filter_mode=filtering)
     chunk.buildDenseCloud(point_colors=True, keep_depth=False)
@@ -192,7 +184,7 @@ def process(path):
     ## export dsm
     print("Exporting DEM...")
     chunk.exportRaster(source_data=Metashape.DataSource.ElevationData,
-                    path=path + "/products/dsm.tif",
+                    path=path + "/products/"+outname+"_dsm.tif",
                     projection=projection,
                     clip_to_boundary=True)
 
@@ -211,11 +203,14 @@ def process(path):
 
     ## export ortho1
     print("Exporting orthomosaic...")
+    compression = Metashape.ImageCompression()
+    compression.tiff_compression = Metashape.ImageCompression.TiffCompressionNone
     chunk.exportRaster(source_data=Metashape.DataSource.OrthomosaicData,
-                            path=path + "/products/ortho1.tif",
+                            path=path + "/products/"+outname+"_ortho.tif",
                             projection=projection,
                             save_alpha=True,
-                            clip_to_boundary=True)
+                            clip_to_boundary=True,
+                            image_compression=compression)
 
     print("Writing processing report...")
     chunk.exportReport(path=path + "/reports/Metashape.pdf")
@@ -231,7 +226,7 @@ def setupDirectories(path):
         if not os.path.exists(path+"/photogrammetry"): os.mkdir(path+"/photogrammetry")
         if not os.path.exists(path + "/logs"): os.mkdir(path + "/logs")
         if not os.path.exists(path + "/products"): os.mkdir(path + "/products")
-    except:
+    except RuntimeError:
         print("Error: could not create directory structure")
         return False
     return True
@@ -242,11 +237,12 @@ def main():
     print("Script started...")
 
     # Check for arguments
-    if len(sys.argv) < 2:
+    if len(sys.argv) < 3:
         print("No valid path input. Script aborted.")
         return False
     if os.path.isdir(sys.argv[1]):
         path = sys.argv[1]
+        outname = sys.argv[2]
     else:
         print("No valid path input. Script aborted.")
         return False
@@ -265,7 +261,7 @@ def main():
         return False
 
     # Run process
-    process(path)
+    process(path, outname)
 
     # Calculate time to completion
     t1 = time.time()
