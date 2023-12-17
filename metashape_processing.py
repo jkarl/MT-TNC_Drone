@@ -1,6 +1,7 @@
 # metashape_processing.py
 
-
+# Metashape License Key
+licenseKey = "A8RBJ-Y33UL-A6A9H-45H3P-ZZZN4"
 
 # Load libraries
 import sys
@@ -12,12 +13,20 @@ from osgeo import gdal
 from shapely.geometry import MultiPoint, mapping
 from shapely.ops import transform
 import fiona
-import pyproj
+#import pyproj
+
+# Check and set metashape licensing
+if not Metashape.app.activated:
+    try:
+        Metashape.License().activate(licenseKey)
+    except:
+        print("Cannot connect to the license server, or no activated license for Metashape.")
+
 
 # set environment variables
-path = 'C:/Users/jkarl/Downloads/Matador_Emond' # switch to an argument
+path = 'C:/Users/jkarl/Downloads/2022/PL1' # switch to an argument
 TYPES = ["jpg", "jpeg", "tif", "tiff"]
-proj_crs = Metashape.CoordinateSystem("EPSG::32100") #output all data in State Plane (m)
+proj_crs = Metashape.CoordinateSystem("EPSG::32100") # output all data in State Plane (m)
 projection = Metashape.OrthoProjection()
 projection.crs = proj_crs
 accuracy = 1  #align photos accuracy with High Accuracy (downscale=1)
